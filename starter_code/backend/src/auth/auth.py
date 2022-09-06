@@ -4,10 +4,9 @@ from functools import wraps
 from jose import jwt
 from urllib.request import urlopen
 
-
-AUTH0_DOMAIN = 'udacity-fsnd.auth0.com'
+AUTHO_DOMAIN = 'dev-kaz9ci7y.us.auth0.com'
 ALGORITHMS = ['RS256']
-API_AUDIENCE = 'dev'
+API_AUDIENCE = 'drinks'
 
 ## AuthError Exception
 '''
@@ -19,6 +18,7 @@ class AuthError(Exception):
         self.error = error
         self.status_code = status_code
 
+    
 
 ## Auth Header
 
@@ -31,7 +31,20 @@ class AuthError(Exception):
     return the token part of the header
 '''
 def get_token_auth_header():
-   raise Exception('Not Implemented')
+    if "Authorization" not in request.headers:
+        raise AuthError({
+            "error": "Authorization_not_defined",
+            "description":"header not present in your request"
+        }, 401)
+    request_body = request.headers["Authorization"]
+    parts = request_body.split(' ')
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise AuthError({
+            "error": "invalid_header",
+            "description": "header malformed and should contain 'Bearer' "
+        }, 401)
+
+    return parts[1]
 
 '''
 @TODO implement check_permissions(permission, payload) method
@@ -45,7 +58,17 @@ def get_token_auth_header():
     return true otherwise
 '''
 def check_permissions(permission, payload):
-    raise Exception('Not Implemented')
+    if 'permissions' not in payload:
+        raise AuthError({
+            "error":"bad request",
+            "description":"not able to verify the issuer"
+        }, 400)
+    if permission not in payload['permissions']:
+        raise AuthError({
+            "error":"permission denied",
+            "description":"the issuer doesn't have the right to login"
+        }, 403)
+    return True
 
 '''
 @TODO implement verify_decode_jwt(token) method
@@ -61,7 +84,63 @@ def check_permissions(permission, payload):
     !!NOTE urlopen has a common certificate error described here: https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
 '''
 def verify_decode_jwt(token):
-    raise Exception('Not Implemented')
+    jsonurl = urlopen(f'https://{AUTHO_DOMAIN}/.well-known/jwks.json')
+    jwks = json.loads(jsonurl.read())
+
+    unverified_header = ""
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+    except:
+        raise AuthError({
+            "error": "invalid token",
+            "description": "token is malformed"
+        }, 401)
+    
+
+    rsa_key = {}
+
+    if 'kid' not in unverified_header:
+        raise AuthError({
+           "error": "invalid_header",
+           "description":"header malformed" 
+        }, 401)
+    for key in jwks['keys']:
+        if key['kid'] == unverified_header['kid']:
+            rsa_key['kty'] = key['kty']
+            rsa_key['kid'] = key['kid']
+            rsa_key['use'] = key['use']
+            rsa_key['n'] = key['n']
+            rsa_key['e'] = key['e']
+    if rsa_key:
+        try:
+            payload = jwt.decode(
+                token,
+                rsa_key,
+                algorithms=ALGORITHMS,
+                audience=API_AUDIENCE,
+                issuer=f'https://{AUTHO_DOMAIN}/'
+            )
+            return payload
+        except jwt.ExpiredSignatureError:
+            raise AuthError({
+                "error":"expired token",
+                "description":"the provided token is expired"
+            }, 401)
+
+        except jwt.JWTClaimsError:
+            raise AuthError({
+                "error":"invalid_claims",
+                "description":"Incorrect claims, please check the Audience and the Issuer."
+            }, 401)
+        except Exception:
+            raise AuthError({
+                "error":"invalid_header",
+                "descrription":"Unable to parse authentication key."
+            }, 400)
+    raise AuthError({
+        "error": "Invalid_header",
+        "description":"Unable to find the appropriate key."
+    }, 400)
 
 '''
 @TODO implement @requires_auth(permission) decorator method
@@ -84,3 +163,5 @@ def requires_auth(permission=''):
 
         return wrapper
     return requires_auth_decorator
+
+   
