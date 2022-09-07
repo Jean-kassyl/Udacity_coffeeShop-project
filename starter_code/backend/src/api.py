@@ -33,7 +33,6 @@ def get_drinks():
     drinks = ""
     try: 
         un_drinks = Drink.query.all()
-        print(un_drinks)
         drinks = [drink.short() for drink in un_drinks]
     except:
         abort(404)
@@ -92,18 +91,35 @@ def create_drink(jwt):
     n_title = ""
     n_recipe = ""
     n_drink = []
-    
+    """
+        it is important to use json.dumps to turn every sent data as a json data.
+        I have created two ways to insert the data as for the test in postman, the recipe is
+        sent as dictionary and the front send it as a list. 
+    """
     try:
         n_title = body.get("title")
         n_recipe = body.get("recipe")
-        drink = Drink(
+        if type(n_recipe) == dict:
+            print("from dictionnaire")
+            obj = f'[{json.dumps(n_recipe)}]'
+            print(obj)
+            drink = Drink(
             title = n_title,
-            recipe = f'[{json.dumps(n_recipe)}]'
-        )
+            recipe = obj
+            )
+            drink.insert()
+        else:
+            recipes = json.dumps(n_recipe)
+            print(recipes, type(recipes))
+            drink = Drink(
+            title = n_title,
+            recipe = recipes
+            )
+            print(drink)
+            
+            drink.insert()
+            
         
-        drink.insert()
-        
-        print(drink)
         q = Drink.query.filter_by(title = drink.title).first()
         n_drink.append(q.long())
         
@@ -238,3 +254,5 @@ def authorization_failed(er):
         "error": er.status_code,
         "message": er.error['error']
     })
+
+
